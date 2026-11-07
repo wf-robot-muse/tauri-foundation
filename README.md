@@ -1,65 +1,94 @@
 # Tauri Foundation
 
-> The goal of this repository is to serve as a starting point and reference for all
-  Tauri apps built with Vite, React, and TypeScript — tested, signed, and
-  distributed automatically with GitHub Actions for macOS (Apple Silicon),
-  Windows, Linux x64, and Linux ARM64 (Raspberry Pi).
+Cross-platform **desktop** foundation built on [Tauri 2](https://tauri.app):
+a Rust core with a web frontend (TypeScript + Vite) rendered by the OS
+webview. One codebase produces native bundles for Windows, macOS, and
+Linux — including Linux ARM64 for Raspberry Pi.
 
-## Contents
+Built and verified entirely in GitHub Actions; no local development
+machine is required. The starter app is the canonical Tauri greeting
+example: type a name and the **Rust backend** answers through Tauri's IPC
+bridge, proving the full stack (webview UI &harr; Rust core) end to end.
 
-- Root UI in [`index.html`](index.html) and [`src/main.ts`](src/main.ts).
-- Desktop shell in [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json),
-  [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml),
-  [`src-tauri/src/main.rs`](src-tauri/src/main.rs), and
-  [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs).
-- App icons in [`src-tauri/icons/`](src-tauri/icons/).
-- CI in [`.github/workflows/tauri.yml`](.github/workflows/tauri.yml).
+## Configuration
 
-## Develop
+| Item | Value |
+| --- | --- |
+| App identifier | `com.wf.robot.muse.taurifoundation` |
+| Product name | `TauriFoundation` |
+| Tauri | 2.x (`tauri` / `tauri-build` crates, `@tauri-apps/cli` / `@tauri-apps/api`) |
+| Frontend | TypeScript + Vite, dev server on port 1420 |
+| Window | 800 × 600, title `TauriFoundation` |
 
-```sh
-npm install
-npm run tauri dev
-```
+## CI (GitHub Actions)
 
-## Build
+Every push to `main` runs `.github/workflows/tauri.yml` as a 4-way matrix
+(public repo = unlimited free standard runner minutes):
 
-```sh
-npm run build
-npm run tauri build
-```
+| Job | Runner | Bundles produced |
+| --- | --- | --- |
+| Windows | `windows-latest` | NSIS installer (`.exe`), MSI (`.msi`) |
+| macOS (Apple Silicon) | `macos-26` | `.dmg`, `.app` |
+| Linux x64 | `ubuntu-latest` | `.deb`, `.AppImage` |
+| Linux ARM64 (Raspberry Pi) | `ubuntu-24.04-arm` | `.deb`, `.AppImage` |
 
-## Links
+Each job uploads its bundles as a named artifact on the run.
 
-- [Tauri v2 docs](https://v2.tauri.app/)
-- [Tauri GitHub Action](https://github.com/tauri-apps/tauri-action)
-- [Icons reference](https://v2.tauri.app/develop/icons/)
+## Installation behaviour
 
-## CI
+- **Windows:** the NSIS installer is configured with
+  `installMode: currentUser` (see `src-tauri/tauri.conf.json`), so it
+  installs per-user **without administrator elevation**. The MSI is the
+  conventional machine-wide alternative.
+- **macOS:** the `.app` can be dragged into `~/Applications` per-user.
+- **Linux:** the `.AppImage` runs with no installation at all; the `.deb`
+  is the system-package option (requires sudo, as all `.deb` installs do).
 
-| Job                         | Runner            | Formats       | Artifact           |
-| ---------------------------- | ------------------ | ------------- | ------------------ |
-| Windows                      | `windows-latest`   | `nsis`, `msi` | `tauri-windows`    |
-| macOS (Apple Silicon)        | `macos-26`         | `dmg`, `app`  | `tauri-macos-arm64`|
-| Linux x64                    | `ubuntu-latest`    | `deb`, `appimage` | `tauri-linux-x64` |
-| Linux ARM64 (Raspberry Pi)   | `ubuntu-24.04-arm` | `deb`, `appimage` | `tauri-linux-arm64` |
+## Signing (not yet configured)
 
-The `nsis`, `msi`, `dmg`, `deb`, and `appimage` formats are bundled, and all
-bundles are uploaded as artifacts.
+Builds are currently **unsigned**:
 
-## App updates
+- Windows: SmartScreen will warn on first run of the installers.
+- macOS: Gatekeeper will block the app until it is signed with an Apple
+  Developer ID certificate and notarized. Add the `APPLE_CERTIFICATE`,
+  `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
+  `APPLE_PASSWORD`, and `APPLE_TEAM_ID` secrets and the Tauri bundler
+  will sign and notarize during the macOS job.
+- Windows code signing can be added later via the
+  `bundle.windows.certificateThumbprint` / timestamp settings.
 
-This repository configures Tauri with `"updater": { "active": false }`,
-so no update endpoint is polled.
+## Auto-update (activation steps)
 
-The Rust plugin updater is enabled inside its `Cargo.toml` to keep the
-update path functional. To enable updates in your app, you need to:
+Tauri's updater is deliberately not wired into this foundation yet. To
+activate it:
 
-  1. Generate an update signing key pair: `npx tauri signer generate`.
-  2. Add the private key and its password as repo secrets
-     (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`).
+1. Generate an update signing key pair: `npx tauri signer generate`.
+2. Add the private key and its password as repo secrets
+   (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`).
+3. Add the `tauri-plugin-updater` crate + `@tauri-apps/plugin-updater`
+   package, register the plugin in `src-tauri/src/lib.rs`, and set
+   `bundle.createUpdaterArtifacts: true` plus the
+   `plugins.updater` endpoint (GitHub Releases `latest.json`) in
+   `src-tauri/tauri.conf.json`.
+4. Publish bundles through GitHub Releases so the updater endpoint has a
+   release to read.
+
+## Upgrading
+
+- Frontend/tooling: bump versions in `package.json`, run `npm install`
+  to refresh `package-lock.json`, commit both.
+- Tauri/Rust side: bump `tauri` and `tauri-build` in
+  `src-tauri/Cargo.toml`. CI runs `cargo` with a fresh lock resolution;
+  commit a `Cargo.lock` once one has been generated by a build if you
+  want fully pinned Rust dependencies.
+- Icons: replace `src-tauri/icons/icon-source-1024.png` and regenerate
+  the set with `npx tauri icon src-tauri/icons/icon-source-1024.png`.
 
 ## Notes
 
-- This repository is public by design: it is what makes the GitHub Actions minutes (including macOS and ARM64 Linux runners) free and unlimited. Do not commit secrets to it; signing material belongs in GitHub Actions secrets only.
-- Raspberry Pi targets assume a 64-bit Raspberry Pi OS (Pi 3/4/5). The app uses the system WebKitGTK webview, which Raspberry Pi OS provides.
+- This repository is public by design: it is what makes the GitHub
+  Actions minutes (including macOS and ARM64 Linux runners) free and
+  unlimited. Do not commit secrets to it; signing material belongs in
+  GitHub Actions secrets only.
+- Raspberry Pi targets assume a 64-bit Raspberry Pi OS (Pi 3/4/5). The
+  app uses the system WebKitGTK webview, which Raspberry Pi OS provides.
